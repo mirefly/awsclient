@@ -31,3 +31,9 @@ func (dc *dynamodbClient) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutIt
 	defer cancel()
 	return dc.Raw.PutItem(cxt, input)
 }
+
+func (dc *dynamodbClient) Scan(input *dynamodb.ScanInput) (*dynamodb.ScanOutput, error) {
+	cxt, cancel := context.WithTimeout(context.Background(), dc.timeout.Value())
+	defer cancel()
+	return dc.Raw.Scan(cxt, input)
+}
