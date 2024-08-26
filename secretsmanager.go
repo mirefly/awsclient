@@ -2,12 +2,12 @@ package awsclient
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/savaki/jq"
 )
 
 type secretsmanagerClient struct {
@@ -42,35 +42,27 @@ func (sc *secretsmanagerClient) getSecretRawWithContext(ctx context.Context, sec
 	return secret, nil
 }
 
-func (sc *secretsmanagerClient) getSecretJSONWithContext(ctx context.Context, secretName string) (map[string]string, error) {
-	v := make(map[string]string)
-
-	secret, err := sc.getSecretRawWithContext(ctx, secretName)
-	if err != nil {
-		return v, err
-	}
-
-	err = json.Unmarshal([]byte(secret), &v)
-	return v, err
-}
-
-func (sc *secretsmanagerClient) getSecretValueWithContext(ctx context.Context, secretName string, key string) (string, error) {
-	secretJSON, err := sc.getSecretJSONWithContext(ctx, secretName)
+func (sc *secretsmanagerClient) getSecretValueWithContext(ctx context.Context, secretName string, selector string) (string, error) {
+	raw, err := sc.getSecretRawWithContext(ctx, secretName)
 	if err != nil {
 		return "", err
 	}
 
-	value, ok := secretJSON[key]
-	if !ok {
-		return "", fmt.Errorf("value for key '%s' doesn't exist", key)
+	if strings.HasPrefix(selector, ".") {
+		selector = "." + selector
 	}
 
-	return value, nil
+	op, err := jq.Parse(selector)
+	if err != nil {
+		return "", err
+	}
+	bs, err := op.Apply([]byte(raw))
+	return string(bs), err
 }
 
-func (sc *secretsmanagerClient) EasyGetSecretValue(secretName string, key string) (string, error) {
+func (sc *secretsmanagerClient) EasyGetSecretValue(secretName string, selector string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), secretsManagerQueryTimeout)
 	defer cancel()
 
-	return sc.getSecretValueWithContext(ctx, secretName, key)
+	return sc.getSecretValueWithContext(ctx, secretName, selector)
 }
