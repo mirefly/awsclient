@@ -2,6 +2,7 @@ package awsclient
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -24,14 +25,14 @@ func NewSecretsmanagerClient(cfg aws.Config) *secretsmanagerClient {
 	}
 }
 
-func (sc *secretsmanagerClient) getSecretRawWithContext(ctx context.Context, secretName string) (string, error) {
+func (sc *secretsmanagerClient) getSecretRawWithContext(ctx context.Context, secretName string) ([]byte, error) {
 	input := &secretsmanager.GetSecretValueInput{
 		SecretId: &secretName,
 	}
 
 	result, err := sc.Raw.GetSecretValue(ctx, input)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	secret := ""
@@ -39,13 +40,17 @@ func (sc *secretsmanagerClient) getSecretRawWithContext(ctx context.Context, sec
 		secret = *result.SecretString
 	}
 
-	return secret, nil
+	return []byte(secret), nil
 }
 
-func (sc *secretsmanagerClient) getSecretValueWithContext(ctx context.Context, secretName string, selector string) (string, error) {
+func (sc *secretsmanagerClient) getSecretValueWithContext(ctx context.Context, secretName string, selector string) ([]byte, error) {
 	raw, err := sc.getSecretRawWithContext(ctx, secretName)
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+
+	if selector == "" {
+		return raw, nil
 	}
 
 	if strings.HasPrefix(selector, ".") {
@@ -54,15 +59,40 @@ func (sc *secretsmanagerClient) getSecretValueWithContext(ctx context.Context, s
 
 	op, err := jq.Parse(selector)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	bs, err := op.Apply([]byte(raw))
-	return string(bs), err
+
+	return bs, err
 }
 
-func (sc *secretsmanagerClient) EasyGetSecretValue(secretName string, selector string) (string, error) {
+func (sc *secretsmanagerClient) EasyGetSecretValue(secretName string, selector string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), secretsManagerQueryTimeout)
 	defer cancel()
 
 	return sc.getSecretValueWithContext(ctx, secretName, selector)
+}
+
+// EasyGetSecretValueS is a helper function to get secret value as string
+//
+// If selector is empty, it will return the secret value as string.
+//
+// If selector is not empty, it will expect the secret value to be a JSON string and will return the selected value as string.
+// If the selected field is not string, it will return error.
+func (sc *secretsmanagerClient) EasyGetSecretValueS(secretName string, selector string) (string, error) {
+	bs, err := sc.EasyGetSecretValue(secretName, selector)
+	if err != nil {
+		return "", err
+	}
+
+	if selector == "" {
+		return string(bs), nil
+	}
+
+	var s string
+	if err := json.Unmarshal(bs, &s); err != nil {
+		return "", err
+	}
+
+	return s, nil
 }
