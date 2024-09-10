@@ -43,7 +43,16 @@ func (sc *secretsmanagerClient) getSecretRawWithContext(ctx context.Context, sec
 	return []byte(secret), nil
 }
 
-func (sc *secretsmanagerClient) getSecretValueWithContext(ctx context.Context, secretName string, selector string) ([]byte, error) {
+// EasyGetSecretValue is a helper function to get secret value as byte slice
+//
+// If selector is empty, it will return the raw secret value as byte slice.
+//
+// If selector is not empty, it will expect the secret value to be a JSON string and will return the selected part as byte slice.
+// If the selected field is a string, double quotes will be kept. `EasyGetSecretValueS` should be used instead.
+func (sc *secretsmanagerClient) EasyGetSecretValue(secretName string, selector string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), secretsManagerQueryTimeout)
+	defer cancel()
+
 	raw, err := sc.getSecretRawWithContext(ctx, secretName)
 	if err != nil {
 		return nil, err
@@ -53,7 +62,7 @@ func (sc *secretsmanagerClient) getSecretValueWithContext(ctx context.Context, s
 		return raw, nil
 	}
 
-	if strings.HasPrefix(selector, ".") {
+	if !strings.HasPrefix(selector, ".") {
 		selector = "." + selector
 	}
 
@@ -61,16 +70,7 @@ func (sc *secretsmanagerClient) getSecretValueWithContext(ctx context.Context, s
 	if err != nil {
 		return nil, err
 	}
-	bs, err := op.Apply([]byte(raw))
-
-	return bs, err
-}
-
-func (sc *secretsmanagerClient) EasyGetSecretValue(secretName string, selector string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), secretsManagerQueryTimeout)
-	defer cancel()
-
-	return sc.getSecretValueWithContext(ctx, secretName, selector)
+	return op.Apply([]byte(raw))
 }
 
 // EasyGetSecretValueS is a helper function to get secret value as string
