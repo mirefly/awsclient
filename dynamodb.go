@@ -37,3 +37,9 @@ func (dc *dynamodbClient) Scan(input *dynamodb.ScanInput) (*dynamodb.ScanOutput,
 	defer cancel()
 	return dc.Raw.Scan(cxt, input)
 }
+
+func (dc *dynamodbClient) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+	cxt, cancel := context.WithTimeout(context.Background(), dc.timeout.Value())
+	defer cancel()
+	return dc.Raw.GetItem(cxt, input)
+}
