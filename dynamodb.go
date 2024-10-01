@@ -49,3 +49,9 @@ func (dc *dynamodbClient) UpdateItem(input *dynamodb.UpdateItemInput) (*dynamodb
 	defer cancel()
 	return dc.Raw.UpdateItem(cxt, input)
 }
+
+func (dc *dynamodbClient) DeleteItem(input *dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error) {
+	cxt, cancel := context.WithTimeout(context.Background(), dc.timeout.Value())
+	defer cancel()
+	return dc.Raw.DeleteItem(cxt, input)
+}
